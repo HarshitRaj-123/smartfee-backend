@@ -1,0 +1,340 @@
+const StudentFee = require('../models/studentFee.model');
+const FeeTemplate = require('../models/feeTemplate.model');
+const User = require('../models/user.model');
+
+// Generate student fee from template
+const generateStudentFee = async (req, res) => {
+  try {
+    const { studentId, courseId, semester, academicYear } = req.body;
+    
+    // Check if student fee already exists
+    const existingFee = await StudentFee.findOne({
+      studentId,
+      semester,
+      academicYear
+    });
+    
+    if (existingFee) {
+      return res.status(400).json({
+        success: false,
+        message: 'Fee structure already exists for this student and semester'
+      });
+    }
+    
+    // Get the fee template
+    const template = await FeeTemplate.getTemplateByCourse(courseId, semester, academicYear);
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: 'No fee template found for this course and semester'
+      });
+    }
+    
+    // Validate student exists
+    const student = await User.findById(studentId);
+    if (!student || student.role !== 'student') {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
+    }
+    
+    // Clone template for student
+    const studentFeeData = template.cloneForStudent(studentId);
+    studentFeeData.generatedBy = req.user.id;
+    
+    // Set due date (30 days from now by default)
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 30);
+    studentFeeData.dueDate = dueDate;
+    
+    const studentFee = new StudentFee(studentFeeData);
+    await studentFee.save();
+    
+    // Populate the response
+    await studentFee.populate([
+      { path: 'studentId', select: 'firstName lastName studentId email' },
+      { path: 'courseId', select: 'name code' },
+      { path: 'feeItems.categoryId', select: 'name type' },
+      { path: 'templateId', select: 'templateName' }
+    ]);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Student fee generated successfully',
+      data: studentFee
+    });
+  } catch (error) {
+    console.error('Error generating student fee:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate student fee',
+      error: error.message
+    });
+  }
+};
+
+// Get student fees
+const getStudentFees = async (req, res) => {
+  try {
+    const { studentId, semester, academicYear, status } = req.query;
+    
+    const filters = {};
+    if (studentId) filters.studentId = studentId;
+    if (semester) filters.semester = parseInt(semester);
+    if (academicYear) filters.academicYear = academicYear;
+    if (status) filters.status = status;
+    
+    const studentFees = await StudentFee.find(filters)
+      .populate('studentId', 'firstName lastName studentId email')
+      .populate('courseId', 'name code department')
+      .populate('feeItems.categoryId', 'name type')
+      .populate('templateId', 'templateName')
+      .populate('generatedBy', 'firstName lastName')
+      .sort({ createdAt: -1 });
+    
+    res.status(200).json({
+      success: true,
+      data: studentFees,
+      count: studentFees.length
+    });
+  } catch (error) {
+    console.error('Error fetching student fees:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch student fees',
+      error: error.message
+    });
+  }
+};
+
+// Get student fee by ID
+const getStudentFeeById = async (req, res) => {
+  try {
+    const studentFee = await StudentFee.findById(req.params.id)
+      .populate('studentId', 'firstName lastName studentId email phone')
+      .populate('courseId', 'name code department')
+      .populate('feeItems.categoryId', 'name type meta')
+      .populate('templateId', 'templateName')
+      .populate('generatedBy', 'firstName lastName')
+      .populate('fines.imposedBy', 'firstName lastName')
+      .populate('discounts.approvedBy', 'firstName lastName');
+    
+    if (!studentFee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student fee not found'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: studentFee
+    });
+  } catch (error) {
+    console.error('Error fetching student fee:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch student fee',
+      error: error.message
+    });
+  }
+};
+
+// Update student fee items
+const updateStudentFeeItems = async (req, res) => {
+  try {
+    const { feeItems } = req.body;
+    
+    const studentFee = await StudentFee.findById(req.params.id);
+    if (!studentFee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student fee not found'
+      });
+    }
+    
+    // Update fee items
+    if (feeItems) {
+      feeItems.forEach(updatedItem => {
+        const existingItem = studentFee.feeItems.id(updatedItem._id);
+        if (existingItem) {
+          if (updatedItem.originalAmount !== undefined) existingItem.originalAmount = updatedItem.originalAmount;
+          if (updatedItem.isIncluded !== undefined) existingItem.isIncluded = updatedItem.isIncluded;
+          if (updatedItem.notes !== undefined) existingItem.notes = updatedItem.notes;
+        }
+      });
+    }
+    
+    studentFee.lastModifiedBy = req.user.id;
+    await studentFee.save();
+    
+    res.status(200).json({
+      success: true,
+      message: 'Student fee updated successfully',
+      data: studentFee
+    });
+  } catch (error) {
+    console.error('Error updating student fee:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update student fee',
+      error: error.message
+    });
+  }
+};
+
+// Add fine to student fee
+const addFine = async (req, res) => {
+  try {
+    const { name, amount, reason } = req.body;
+    
+    const studentFee = await StudentFee.findById(req.params.id);
+    if (!studentFee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student fee not found'
+      });
+    }
+    
+    const fineData = {
+      name,
+      amount,
+      reason,
+      imposedBy: req.user.id
+    };
+    
+    await studentFee.addFine(fineData);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Fine added successfully',
+      data: studentFee
+    });
+  } catch (error) {
+    console.error('Error adding fine:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add fine',
+      error: error.message
+    });
+  }
+};
+
+// Add discount to student fee
+const addDiscount = async (req, res) => {
+  try {
+    const { name, amount, type, reason } = req.body;
+    
+    const studentFee = await StudentFee.findById(req.params.id);
+    if (!studentFee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student fee not found'
+      });
+    }
+    
+    const discountData = {
+      name,
+      amount,
+      type: type || 'fixed',
+      reason,
+      approvedBy: req.user.id
+    };
+    
+    await studentFee.addDiscount(discountData);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Discount added successfully',
+      data: studentFee
+    });
+  } catch (error) {
+    console.error('Error adding discount:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add discount',
+      error: error.message
+    });
+  }
+};
+
+// Get overdue fees
+const getOverdueFees = async (req, res) => {
+  try {
+    const { courseId, semester } = req.query;
+    
+    const filters = {};
+    if (courseId) filters.courseId = courseId;
+    if (semester) filters.semester = parseInt(semester);
+    
+    const overdueFees = await StudentFee.getOverdueFees(filters);
+    
+    res.status(200).json({
+      success: true,
+      data: overdueFees,
+      count: overdueFees.length
+    });
+  } catch (error) {
+    console.error('Error fetching overdue fees:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch overdue fees',
+      error: error.message
+    });
+  }
+};
+
+// Get student fee summary
+const getStudentFeeSummary = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    
+    const fees = await StudentFee.find({ studentId })
+      .populate('courseId', 'name code')
+      .sort({ semester: 1, academicYear: -1 });
+    
+    const summary = {
+      totalSemesters: fees.length,
+      totalDue: fees.reduce((sum, fee) => sum + fee.netAmount, 0),
+      totalPaid: fees.reduce((sum, fee) => sum + fee.totalPaid, 0),
+      balanceDue: 0,
+      fees: fees.map(fee => ({
+        _id: fee._id,
+        semester: fee.semester,
+        academicYear: fee.academicYear,
+        course: fee.courseId,
+        totalDue: fee.netAmount,
+        totalPaid: fee.totalPaid,
+        balanceDue: fee.balanceDue,
+        status: fee.status,
+        paymentPercentage: fee.paymentPercentage
+      }))
+    };
+    
+    summary.balanceDue = summary.totalDue - summary.totalPaid;
+    
+    res.status(200).json({
+      success: true,
+      data: summary
+    });
+  } catch (error) {
+    console.error('Error fetching student fee summary:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch student fee summary',
+      error: error.message
+    });
+  }
+};
+
+module.exports = {
+  generateStudentFee,
+  getStudentFees,
+  getStudentFeeById,
+  updateStudentFeeItems,
+  addFine,
+  addDiscount,
+  getOverdueFees,
+  getStudentFeeSummary
+}; 
