@@ -42,4 +42,14 @@ router.get('/advance', permit('VIEW_FEE_DETAILS'), viewAdvancePayment);
 // --- Semester Info View (Student) ---
 router.get('/semester', permit('SEMESTER_INFO_VIEW'), viewSemesterInfo);
 
+// Commented out unused endpoints for deployment
+// router.get('/view-personal-overview', viewPersonalOverview);
+// router.get('/view-fee-details', viewFeeDetails);
+// router.post('/pay-online', payOnline);
+// router.get('/download-receipt', downloadReceipt);
+// router.get('/view-services', viewServices);
+// router.put('/update-profile', updateProfile);
+// router.get('/view-advance-payment', viewAdvancePayment);
+// router.get('/view-semester-info', viewSemesterInfo);
+
 module.exports = router; 
