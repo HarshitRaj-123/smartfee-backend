@@ -41,16 +41,18 @@ app.use((err, req, res, next) => {
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/smartfee')
   .then(() => {
     console.log('Connected to MongoDB');
-    
     // Initialize session cleanup
     initializeSessionCleanup();
-    
-    // Start server
-    const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
+    // Only start server if not running on Vercel
+    if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+      const PORT = process.env.PORT || 5000;
+      app.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+      });
+    }
   })
   .catch((err) => {
     console.error('MongoDB connection error:', err);
-  }); 
+  });
+
+module.exports = app; 
