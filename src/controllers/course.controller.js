@@ -1,5 +1,6 @@
 const Course = require('../models/course.model');
 const User = require('../models/user.model');
+const organizedCourses = require('../constants/organized_courses');
 
 // Add new course
 const addCourse = async (req, res) => {
@@ -473,6 +474,28 @@ const getCourseStats = async (req, res) => {
   }
 };
 
+// Get all hardcoded courses (for Add Student modal, etc)
+const getCoursesList = async (req, res) => {
+  try {
+    // Add _id and code fields if missing
+    const coursesWithIds = organizedCourses.map((course, idx) => ({
+      ...course,
+      _id: `${course.program_name}-${course.branch}`.replace(/\s+/g, '_').toLowerCase(),
+      code: course.program_name ? course.program_name.replace(/\s+/g, '').toUpperCase() : `COURSE${idx+1}`
+    }));
+    res.status(200).json({
+      success: true,
+      data: coursesWithIds
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch courses',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   addCourse,
   editCourse,
@@ -482,5 +505,6 @@ module.exports = {
   getCoursesByCategory,
   getCoursesBySemesters,
   getCourseById,
-  getCourseStats
+  getCourseStats,
+  getCoursesList // <-- export it
 }; 

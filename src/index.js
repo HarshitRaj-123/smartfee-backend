@@ -25,6 +25,11 @@ app.use('/api/users', require('./routes/user.routes'));
 app.use('/api/sessions', require('./routes/session.routes'));
 app.use('/api/navigation', require('./routes/navigation.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
+app.use('/api/student-fees', require('./routes/studentFee.routes'));
+app.use('/api/payments', require('./routes/payment.routes'));
+app.use('/api/fee-structures', require('./routes/feeStructure.routes'));
+
+console.log('All routes registered successfully!');
 
 // Error handling middleware
 app.use((err, req, res, next) => {

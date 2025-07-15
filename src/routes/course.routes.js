@@ -13,7 +13,8 @@ const {
   getCoursesByCategory,
   getCoursesBySemesters,
   getCourseById,
-  getCourseStats
+  getCourseStats,
+  getCoursesList
 } = require('../controllers/course.controller');
 
 // All routes require authentication first
@@ -29,6 +30,7 @@ router.get('/', permit('COURSE_MANAGEMENT'), viewCourses);
 router.get('/stats', permit('COURSE_MANAGEMENT'), getCourseStats);
 router.get('/by-category', permit('COURSE_MANAGEMENT'), getCoursesByCategory);
 router.get('/by-semesters/:semesters', permit('COURSE_MANAGEMENT'), getCoursesBySemesters);
+router.get('/list', permit('COURSE_MANAGEMENT'), getCoursesList);
 router.get('/:id', permit('COURSE_MANAGEMENT'), getCourseById);
 
 module.exports = router; 

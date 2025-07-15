@@ -123,11 +123,11 @@ const studentFeeSchema = new mongoose.Schema({
   courseId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course',
-    required: true
+    required: false
   },
   semester: {
     type: Number,
-    required: true,
+    required: false,
     min: 1,
     max: 10
   },
@@ -138,7 +138,7 @@ const studentFeeSchema = new mongoose.Schema({
   templateId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'FeeTemplate',
-    required: true
+    required: false
   },
   feeItems: [studentFeeItemSchema],
   fines: [fineSchema],

@@ -320,7 +320,7 @@ router.get('/students/:id', permit('ADMIN_MANAGEMENT'), async (req, res) => {
     const { id } = req.params;
 
     const student = await User.findOne({ _id: id, role: 'student' })
-      .populate('courseId', 'name code category program_name branch totalSemesters duration')
+      .populate('courseId', 'name code category program_name branch totalSemesters')
       .select('-password -loginAttempts -lockUntil');
 
     if (!student) {
@@ -463,6 +463,22 @@ router.patch('/students/:id/status', permit('ADMIN_MANAGEMENT'), async (req, res
   }
 });
 
+// Delete student
+router.delete('/students/:id', permit('ADMIN_MANAGEMENT'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const student = await User.findOneAndDelete({ _id: id, role: 'student' });
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+    // Optionally, delete related fee/payment records here
+    res.json({ success: true, message: 'Student deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting student:', error);
+    res.status(500).json({ success: false, message: 'Error deleting student' });
+  }
+});
+
 // Get students statistics
 router.get('/students/stats/overview', permit('ADMIN_MANAGEMENT'), async (req, res) => {
   try {
@@ -530,6 +546,33 @@ router.get('/students/stats/overview', permit('ADMIN_MANAGEMENT'), async (req, r
       success: false,
       message: 'Error fetching student statistics'
     });
+  }
+});
+
+// Get student by admission number
+router.get('/students/by-admission/:admissionNo', permit('FEE_PAYMENT'), async (req, res) => {
+  try {
+    const { admissionNo } = req.params;
+    const student = await User.findOne({ studentId: admissionNo, role: 'student' })
+      .populate('courseId', 'name code category program_name branch totalSemesters')
+      .select('-password -loginAttempts -lockUntil');
+    if (!student) {
+      // Student not found
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+    // Always include guardianName (father's name) and currentSemester in the response
+    const studentObj = student.toObject();
+    studentObj.guardianName = student.guardianName || '';
+    studentObj.fathersName = student.guardianName || '';
+    studentObj.currentSemester = student.currentSemester || '';
+    res.json({ success: true, data: studentObj });
+  } catch (error) {
+    if (error.status === 403) {
+      // Forbidden error from permit middleware
+      return res.status(403).json({ success: false, message: 'Forbidden: Insufficient permissions' });
+    }
+    console.error('Error fetching student by admission number:', error);
+    res.status(500).json({ success: false, message: 'Error fetching student' });
   }
 });
 
@@ -870,22 +913,53 @@ router.post('/students/import', permit('ADMIN_MANAGEMENT'), upload.single('file'
     try {
       const result = await parseStudentData(filePath, fileExtension, serviceConfig, false);
       
-      // Bulk insert valid students
+      // Filter out students whose email or studentId already exists
+      const emails = result.processedStudents.map(s => s.email);
+      const studentIds = result.processedStudents.map(s => s.studentId);
+      const existingUsers = await User.find({
+        $or: [
+          { email: { $in: emails } },
+          { studentId: { $in: studentIds } }
+        ]
+      });
+      const existingEmails = new Set(existingUsers.map(u => u.email));
+      const existingStudentIds = new Set(existingUsers.map(u => u.studentId));
+      const toInsert = result.processedStudents.filter(s => !existingEmails.has(s.email) && !existingStudentIds.has(s.studentId));
+      const skipped = result.processedStudents.length - toInsert.length;
       let imported = 0;
-      if (result.processedStudents.length > 0) {
-        await User.insertMany(result.processedStudents);
-        imported = result.processedStudents.length;
+      // Fix invalid enum values and dates before insert
+      toInsert.forEach(s => {
+        // Fix dateOfBirth
+        if (!s.dateOfBirth || isNaN(new Date(s.dateOfBirth).getTime())) {
+          s.dateOfBirth = new Date('2000-01-01'); // fallback default
+        }
+        // Fix hostel.roomType
+        if (s.servicesOpted && s.servicesOpted.hostel) {
+          const validRoomTypes = ['single', 'double', 'triple', 'ac', 'non-ac'];
+          if (!validRoomTypes.includes(s.servicesOpted.hostel.roomType)) {
+            s.servicesOpted.hostel.roomType = 'double';
+          }
+        }
+        // Fix mess.mealType
+        if (s.servicesOpted && s.servicesOpted.mess) {
+          const validMealTypes = ['veg', 'non-veg', 'both'];
+          if (!validMealTypes.includes(s.servicesOpted.mess.mealType)) {
+            s.servicesOpted.mess.mealType = 'veg';
+          }
+        }
+      });
+      if (toInsert.length > 0) {
+        await User.insertMany(toInsert);
+        imported = toInsert.length;
       }
-
       // Clean up uploaded file
       fs.unlinkSync(filePath);
-
       res.json({
         success: true,
-        message: `Import completed. ${imported} students imported, ${result.stats.errors + result.stats.duplicates} skipped.`,
+        message: `Import completed. ${imported} students imported, ${skipped} skipped due to duplicates, ${result.stats.errors + result.stats.duplicates} skipped due to errors.`,
         data: {
           imported,
-          skipped: result.stats.errors + result.stats.duplicates,
+          skipped: skipped + result.stats.errors + result.stats.duplicates,
           errors: result.errorDetails.slice(0, 10) // Return first 10 errors only
         }
       });

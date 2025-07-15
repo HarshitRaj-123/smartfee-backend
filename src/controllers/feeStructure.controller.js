@@ -24,7 +24,12 @@ const getFeeStructures = async (req, res) => {
     if (branch) filter.branch = branch;
     if (semester) filter.semester = parseInt(semester);
     if (academicSession) filter.academicSession = academicSession;
-    if (status) filter.status = status;
+    if (status) {
+      filter.status = status;
+    } else {
+      // By default, show all except archived
+      filter.status = { $ne: 'archived' };
+    }
 
     // Add search functionality
     if (search) {
@@ -88,9 +93,18 @@ const getFeeStructureById = async (req, res) => {
       });
     }
 
+    // Count students with StudentFee for this structure's semester and academic year
+    const studentFeeCount = await StudentFee.countDocuments({
+      semester: feeStructure.semester,
+      academicYear: feeStructure.academicSession
+    });
+
     res.json({
       success: true,
-      data: feeStructure
+      data: {
+        ...feeStructure.toObject(),
+        actualAssignedCount: studentFeeCount
+      }
     });
   } catch (error) {
     console.error('Error fetching fee structure:', error);
@@ -176,6 +190,8 @@ const createFeeStructure = async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating fee structure:', error);
+    console.error('Request body:', req.body);
+    if (error.stack) console.error(error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to create fee structure',
@@ -674,6 +690,54 @@ const sendUpdateNotifications = async (feeStructure, updatedBy) => {
   }
 };
 
+// Assign all fee structures to all eligible students (for script and endpoint)
+const assignFeeStructuresToAllEligibleStudents = async (adminUserId = null) => {
+  const FeeStructure = require('../models/feeStructure.model');
+  const User = require('../models/user.model');
+  const StudentFee = require('../models/studentFee.model');
+  let totalAssigned = 0;
+  let totalSkipped = 0;
+  const allStructures = await FeeStructure.find({ status: 'active' });
+  for (const feeStructure of allStructures) {
+    const effectiveFrom = feeStructure.propagationSettings?.effectiveFrom || feeStructure.createdAt;
+    const students = await User.find({
+      role: 'student',
+      'courseInfo.program_name': feeStructure.programName,
+      'courseInfo.branch': feeStructure.branch,
+      currentSemester: feeStructure.semester,
+      academicYear: feeStructure.academicSession,
+      isActive: true
+    });
+    for (const student of students) {
+      const existingFee = await StudentFee.findOne({
+        studentId: student._id,
+        semester: feeStructure.semester,
+        academicYear: feeStructure.academicSession
+      });
+      if (!existingFee) {
+        await feeStructure.assignToStudents([student._id], adminUserId || feeStructure.createdBy);
+        await createStudentFeeRecord(student._id, feeStructure, adminUserId || feeStructure.createdBy);
+        totalAssigned++;
+      } else {
+        totalSkipped++;
+      }
+    }
+  }
+  return { totalAssigned, totalSkipped };
+};
+
+// API endpoint for admin to trigger assignment
+const assignAllFeeStructuresEndpoint = async (req, res) => {
+  try {
+    const adminUserId = req.user.id;
+    const result = await assignFeeStructuresToAllEligibleStudents(adminUserId);
+    res.json({ success: true, message: 'Fee structures assigned to all eligible students.', ...result });
+  } catch (error) {
+    console.error('Error assigning all fee structures:', error);
+    res.status(500).json({ success: false, message: 'Failed to assign fee structures', error: error.message });
+  }
+};
+
 module.exports = {
   getFeeStructures,
   getFeeStructureById,
@@ -684,5 +748,7 @@ module.exports = {
   getAssignmentHistory,
   activateFeeStructure,
   archiveFeeStructure,
-  getDashboardStats
+  getDashboardStats,
+  assignFeeStructuresToAllEligibleStudents,
+  assignAllFeeStructuresEndpoint
 };

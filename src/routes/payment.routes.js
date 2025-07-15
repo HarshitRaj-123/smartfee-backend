@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth.middleware');
-const { permit } = require('../middleware/permission.middleware');
+const { verifyToken } = require('../middleware/auth.middleware');
+const permit = require('../middleware/permission.middleware');
 
 const {
   recordPayment,
@@ -18,7 +18,7 @@ const {
 } = require('../controllers/payment.controller');
 
 // Apply authentication middleware to all routes
-router.use(authenticate);
+router.use(verifyToken);
 
 // Routes for payment management
 router.post('/', permit('FEE_PAYMENT'), recordPayment);

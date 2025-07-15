@@ -10,7 +10,7 @@ const navigationConfig = {
     { label: "Students", route: "/students", icon: "School" },
     { label: "Fee Management", route: "/fee-management", icon: "AccountBalanceWallet" },
     { label: "Fee Payment", route: "/fee-payment", icon: "Payments" },
-    { label: "Transactions", route: "/transactions", icon: "ReceiptLong" },
+    // { label: "Transactions", route: "/transactions", icon: "ReceiptLong" },
     { label: "Notifications", route: "/notifications", icon: "Notifications" },
     { label: "Audit Logs", route: "/audit-logs", icon: "History" },
     { label: "Settings", route: "/settings", icon: "Settings" }
@@ -22,7 +22,7 @@ const navigationConfig = {
     { label: "Students", route: "/students", icon: "School" },
     { label: "Fee Management", route: "/fee-management", icon: "AccountBalanceWallet" },
     { label: "Fee Payment", route: "/fee-payment", icon: "Payments" },
-    { label: "Transactions", route: "/transactions", icon: "ReceiptLong" },
+    // { label: "Transactions", route: "/transactions", icon: "ReceiptLong" },
     { label: "Notifications", route: "/notifications", icon: "Notifications" },
     { label: "Audit Logs", route: "/audit-logs", icon: "History" },
     { label: "Settings", route: "/settings", icon: "Settings" }

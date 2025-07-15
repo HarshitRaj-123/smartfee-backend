@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const feeStructureController = require('../controllers/feeStructure.controller');
-const { authenticateToken } = require('../middleware/auth.middleware');
-const { requireRole } = require('../middleware/permission.middleware');
+const { verifyToken } = require('../middleware/auth.middleware');
+const permit = require('../middleware/permission.middleware');
 
-// All routes require authentication and admin role
-router.use(authenticateToken);
-router.use(requireRole(['admin']));
+// All routes require authentication and FEE_MANAGEMENT permission
+router.use(verifyToken);
+router.use(permit('FEE_MANAGEMENT'));
 
 // GET /api/fee-structures - Get all fee structures with filtering
 router.get('/', feeStructureController.getFeeStructures);
@@ -37,5 +37,8 @@ router.put('/:id/activate', feeStructureController.activateFeeStructure);
 
 // PUT /api/fee-structures/:id/archive - Archive fee structure
 router.put('/:id/archive', feeStructureController.archiveFeeStructure);
+
+// Add this route after authentication and permission middleware
+router.post('/assign-all', feeStructureController.assignAllFeeStructuresEndpoint);
 
 module.exports = router; 
