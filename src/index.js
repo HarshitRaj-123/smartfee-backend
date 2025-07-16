@@ -14,9 +14,20 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
+
+// Add request logging for debugging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://smartfee-frontend.vercel.app', 'https://smartfee-frontend-git-main-harshitraj-123.vercel.app', 'https://smartfee-frontend-harshitraj-123.vercel.app']
+    : (process.env.FRONTEND_URL || 'http://localhost:5173'),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Routes
@@ -29,11 +40,26 @@ app.use('/api/student-fees', require('./routes/studentFee.routes'));
 app.use('/api/payments', require('./routes/payment.routes'));
 app.use('/api/fee-structures', require('./routes/feeStructure.routes'));
 
+// Test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Backend is working!', timestamp: new Date().toISOString() });
+});
+
 console.log('All routes registered successfully!');
+
+// 404 handler
+app.use('/api/*', (req, res) => {
+  console.log(`404 - Route not found: ${req.method} ${req.url}`);
+  res.status(404).json({ 
+    message: 'API route not found', 
+    path: req.url,
+    method: req.method 
+  });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Error:', err.stack);
   res.status(500).json({ message: 'Something went wrong!' });
 });
 
