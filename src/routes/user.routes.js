@@ -515,7 +515,7 @@ router.get('/profile', verifyToken, async (req, res) => {
 // Update current user profile
 router.put('/profile', verifyToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.user._id;
     const allowedUpdates = [
       'firstName', 'lastName', 'phone', 'address', 
       'dateOfBirth', 'profilePicture', 'preferences'

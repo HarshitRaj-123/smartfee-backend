@@ -1,6 +1,7 @@
 const StudentFee = require('../models/studentFee.model');
 const FeeTemplate = require('../models/feeTemplate.model');
 const User = require('../models/user.model');
+const { sendFeeSMS } = require("../utils/msg91"); // import it
 
 // Generate student fee from template
 const generateStudentFee = async (req, res) => {
@@ -525,6 +526,30 @@ const getStudentFeeSummary = async (req, res) => {
   }
 };
 
+
+
+const recordStudentFee = async (req, res) => {
+  try {
+    const { studentId, amount } = req.body;
+
+    // Step 1: Save payment to DB (your existing logic)
+    const student = await StudentModel.findById(studentId);
+    if (!student) return res.status(404).json({ message: "Student not found" });
+
+    // Save fee (assuming you already have this logic)
+    // await StudentFeeModel.create({ ... });
+
+    // Step 2: Trigger SMS (you can also check a "notificationsEnabled" flag)
+    await sendFeeSMS(student.name, student.phone, amount);
+
+    return res.status(200).json({ message: "Fee paid and SMS sent" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Something went wrong" });
+  }
+};
+
+
 module.exports = {
   generateStudentFee,
   getStudentFees,
@@ -536,5 +561,6 @@ module.exports = {
   addCustomFee,
   createStudentFeeForCustomFees,
   getOverdueFees,
-  getStudentFeeSummary
+  getStudentFeeSummary,
+  recordStudentFee
 }; 

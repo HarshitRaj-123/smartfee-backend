@@ -579,9 +579,26 @@ router.get('/students/by-admission/:admissionNo', permit('FEE_PAYMENT'), async (
 // Get courses for filters
 router.get('/courses/list', permit('ADMIN_MANAGEMENT'), async (req, res) => {
   try {
-    const courses = await Course.find({ isActive: true })
-      .select('name code category program_name branch totalSemesters')
+    // First try to get courses from database
+    let courses = await Course.find({ isActive: true })
+      .select('name code category program_name branch totalSemesters duration')
       .sort({ name: 1 });
+
+    // If no courses in database, use organized courses as fallback
+    if (!courses || courses.length === 0) {
+      const organizedCourses = require('../constants/organized_courses');
+      
+      courses = organizedCourses.map((course, index) => ({
+        _id: `${course.program_name}-${course.branch}`.replace(/\s+/g, '_').toLowerCase(),
+        name: course.course_name,
+        code: course.program_name ? course.program_name.replace(/\s+/g, '').toUpperCase() + (index + 1).toString().padStart(2, '0') : `COURSE${index+1}`,
+        category: course.category,
+        program_name: course.program_name,
+        branch: course.branch,
+        totalSemesters: course.totalSemesters,
+        duration: course.duration
+      }));
+    }
 
     res.json({
       success: true,

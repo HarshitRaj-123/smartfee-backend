@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/auth.middleware');
 const permit = require('../middleware/permission.middleware');
+const authMiddleware = require("../middleware/auth.middleware.js").verifyToken;
+const recordStudentFee = require('../controllers/studentFee.controller').recordStudentFee;
+
+
 
 const {
   generateStudentFee,
@@ -32,5 +36,6 @@ router.put('/:id', permit('FEE_MANAGEMENT'), updateStudentFeeItems);
 router.post('/:id/fine', permit('FEE_MANAGEMENT'), addFine);
 router.post('/:id/discount', permit('FEE_MANAGEMENT'), addDiscount);
 router.post('/:id/add-custom-fee', permit('FEE_PAYMENT'), addCustomFee);
+router.post("/record", authMiddleware, recordStudentFee);
 
 module.exports = router; 

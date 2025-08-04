@@ -21,10 +21,32 @@ app.use((req, res, next) => {
   next();
 });
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5176',
+  'http://localhost:3000',
+  'http://localhost:5175',
+  // add more ports if needed
+];
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://smartfee-frontend.vercel.app', 'https://smartfee-frontend-git-main-harshitraj-123.vercel.app', 'https://smartfee-frontend-harshitraj-123.vercel.app']
-    : (process.env.FRONTEND_URL || 'http://localhost:5173'),
+  origin: function(origin, callback) {
+    // allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    if (
+      process.env.NODE_ENV === 'production'
+        ? [
+            'https://smartfee-frontend.vercel.app',
+            'https://smartfee-frontend-git-main-harshitraj-123.vercel.app',
+            'https://smartfee-frontend-harshitraj-123.vercel.app'
+          ].includes(origin)
+        : allowedOrigins.includes(origin)
+    ) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'), false);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -69,16 +91,14 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/smartfee'
     console.log('Connected to MongoDB');
     // Initialize session cleanup
     initializeSessionCleanup();
-    // Only start server if not running on Vercel
-    if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-      const PORT = process.env.PORT || 5000;
-      app.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT}`);
-      });
-    }
+    // Start server on all environments
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
   })
   .catch((err) => {
     console.error('MongoDB connection error:', err);
   });
 
-module.exports = app; 
+module.exports = app;
