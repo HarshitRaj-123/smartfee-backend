@@ -17,7 +17,7 @@ const createOrder = async (req, res) => {
       });
     }
 
-    // Validate student exists
+    // Validate student exists and get details for prefill
     const student = await User.findById(studentId);
     if (!student || student.role !== 'student') {
       return res.status(404).json({
@@ -25,6 +25,11 @@ const createOrder = async (req, res) => {
         message: 'Student not found'
       });
     }
+
+    // Add student details to notes for reference
+    notes.studentName = `${student.firstName} ${student.lastName}`;
+    notes.email = student.email;
+    notes.phone = student.phone;
 
     // Generate receipt number
     const receipt = RazorpayService.generateReceiptNumber();

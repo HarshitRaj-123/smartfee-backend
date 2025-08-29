@@ -20,9 +20,12 @@ router.post(
     body('name').notEmpty().withMessage('Name is required'),
     body('email').isEmail().withMessage('Valid email is required'),
     body('phone').notEmpty().withMessage('Phone is required'),
-    body('role').isIn(['admin', 'accountant']).withMessage('Role must be admin or accountant'),
+    body('role').isIn(['admin', 'accountant', 'student']).withMessage('Role must be admin, accountant, or student'),
     body('userId').notEmpty().withMessage('User ID is required'),
     body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    // Add student-specific validations if needed
+    body('studentId').if(body('role').equals('student')).notEmpty().withMessage('Student ID is required'),
+    // ...add more as needed
   ],
   async (req, res) => {
     try {
@@ -31,7 +34,7 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { name, email, phone, role, userId, password } = req.body;
+      const { name, email, phone, role, userId, password, studentId, courseInfo, currentSemester, department } = req.body;
 
       // Split name into firstName and lastName
       const [firstName, ...rest] = name.trim().split(' ');
@@ -47,7 +50,7 @@ router.post(
       const hashedPassword = await bcrypt.hash(password, 10);
 
       // Create user
-      const user = new User({
+      const userData = {
         firstName,
         lastName,
         email,
@@ -57,7 +60,18 @@ router.post(
         password: hashedPassword,
         isActive: true,
         guardianName: req.body.guardianName || '',
-      });
+      };
+
+      // Add student-specific fields
+      if (role === 'student') {
+        userData.studentId = studentId;
+        userData.courseInfo = courseInfo;
+        userData.currentSemester = currentSemester;
+        userData.department = department;
+        // ...add more as needed
+      }
+
+      const user = new User(userData);
 
       await user.save();
 
@@ -945,7 +959,7 @@ router.get('/fees', verifyToken, async (req, res) => {
     if (!currentFee) {
       return res.status(404).json({
         success: false,
-        message: 'No fee record found for current semester. Please contact administration.'
+        message: 'No fee record for current semester. Please contact administration.'
       });
     }
 
@@ -1068,4 +1082,4 @@ router.get('/assigned-students', verifyToken, async (req, res) => {
   }
 });
 
-module.exports = router; 
+module.exports = router;
